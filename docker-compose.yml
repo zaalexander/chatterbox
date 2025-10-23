@@ -1,0 +1,127 @@
+# Docker Compose for Chatterbox MCP Server
+#
+# This sets up a complete TTS system with:
+# 1. Lightweight MCP server (proxy mode)
+# 2. GPU backend TTS service (Gradio)
+#
+# Usage:
+#   docker-compose up -d
+#
+# Access:
+#   - MCP server: http://localhost:8000
+#   - Gradio UI: http://localhost:7860
+
+version: '3.8'
+
+services:
+  # ===========================================================================
+  # MCP Server (Lightweight proxy)
+  # ===========================================================================
+  mcp-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.mcp
+    container_name: chatterbox-mcp
+    ports:
+      - "8000:8000"
+    environment:
+      - TTS_BACKEND_URL=http://tts-backend:7860
+      - TTS_API_KEY=${TTS_API_KEY:-}
+    volumes:
+      - ./voices:/app/voices
+      - ./mcp_config.yaml:/app/mcp_config.yaml
+    depends_on:
+      - tts-backend
+    restart: unless-stopped
+    networks:
+      - chatterbox-net
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+
+  # ===========================================================================
+  # TTS Backend (GPU-accelerated Gradio server)
+  # ===========================================================================
+  tts-backend:
+    image: pytorch/pytorch:2.6.0-cuda11.8-cudnn9-runtime
+    container_name: chatterbox-backend
+    ports:
+      - "7860:7860"
+    volumes:
+      - ./:/app
+      - ${HOME}/.cache/huggingface:/root/.cache/huggingface  # Model cache
+    working_dir: /app
+    command: >
+      bash -c "
+        pip install -e . &&
+        python gradio_tts_app.py
+      "
+    runtime: nvidia  # Requires nvidia-docker
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - CUDA_VISIBLE_DEVICES=0
+    restart: unless-stopped
+    networks:
+      - chatterbox-net
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+networks:
+  chatterbox-net:
+    driver: bridge
+
+# ==============================================================================
+# Alternative: MCP Server Only (if you have a remote backend)
+# ==============================================================================
+#
+# docker-compose -f docker-compose.mcp-only.yml up -d
+#
+# services:
+#   mcp-server:
+#     build:
+#       context: .
+#       dockerfile: Dockerfile.mcp
+#     container_name: chatterbox-mcp
+#     ports:
+#       - "8000:8000"
+#     environment:
+#       - TTS_BACKEND_URL=https://your-remote-backend.com/api
+#     volumes:
+#       - ./voices:/app/voices
+#       - ./mcp_config.yaml:/app/mcp_config.yaml
+#     restart: unless-stopped
+
+# ==============================================================================
+# Alternative: Local Mode (MCP + TTS in one container)
+# ==============================================================================
+#
+# Use this if you want to run everything in one container (requires more RAM).
+#
+# services:
+#   chatterbox-all-in-one:
+#     build:
+#       context: .
+#       dockerfile: Dockerfile.mcp
+#       target: local-mode
+#     container_name: chatterbox-local
+#     ports:
+#       - "8000:8000"
+#     volumes:
+#       - ./voices:/app/voices
+#       - ./mcp_config.yaml:/app/mcp_config.yaml
+#       - ${HOME}/.cache/huggingface:/root/.cache/huggingface
+#     environment:
+#       - MODE=lazy  # or "always"
+#       - DEVICE=cpu  # or "cuda" with runtime: nvidia
+#     restart: unless-stopped
+#     deploy:
+#       resources:
+#         limits:
+#           memory: 10G  # 8GB for model + 2GB overhead

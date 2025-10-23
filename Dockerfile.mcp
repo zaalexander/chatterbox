@@ -1,0 +1,78 @@
+# Lightweight Chatterbox MCP Server Dockerfile
+#
+# This builds a minimal image for running the MCP server in proxy mode.
+# Perfect for resource-constrained VPS (~100MB RAM, minimal CPU).
+#
+# Build:
+#   docker build -f Dockerfile.mcp -t chatterbox-mcp:latest .
+#
+# Run (proxy mode):
+#   docker run -p 8000:8000 \
+#     -e TTS_BACKEND_URL=http://gpu-server:7860 \
+#     -v ./voices:/app/voices \
+#     -v ./mcp_config.yaml:/app/mcp_config.yaml \
+#     chatterbox-mcp:latest
+
+FROM python:3.11-slim
+
+# Install system dependencies (minimal)
+RUN apt-get update && apt-get install -y \
+    libsndfile1 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy only necessary files for MCP server
+COPY mcp_server/ ./mcp_server/
+COPY smart_chunking.py ./
+COPY long_form_tts.py ./
+COPY mcp_config.example.yaml ./mcp_config.yaml
+
+# Install Python dependencies (minimal set for proxy mode)
+RUN pip install --no-cache-dir \
+    mcp \
+    httpx \
+    pydantic \
+    pyyaml \
+    && echo "Installed minimal dependencies for proxy mode"
+
+# Create voices directory
+RUN mkdir -p /app/voices
+
+# Expose MCP server port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import httpx; httpx.get('http://localhost:8000/health')" || exit 1
+
+# Run MCP server
+CMD ["python", "-m", "mcp_server.server"]
+
+
+# ==============================================================================
+# Multi-stage build for local mode (heavier, includes TTS model)
+# ==============================================================================
+
+FROM python:3.11-slim AS local-mode
+
+RUN apt-get update && apt-get install -y \
+    libsndfile1 \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy all source files
+COPY . /app/
+
+# Install full dependencies (includes torch, torchaudio, chatterbox)
+RUN pip install --no-cache-dir -e .
+
+# Pre-download models (optional, speeds up first run)
+# Uncomment to bake models into image (adds ~2GB to image size)
+# RUN python -c "from chatterbox.tts import ChatterboxTTS; ChatterboxTTS.from_pretrained('cpu')"
+
+EXPOSE 8000
+
+CMD ["python", "-m", "mcp_server.server"]

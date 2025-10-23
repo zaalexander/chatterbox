@@ -1,0 +1,139 @@
+# Chatterbox MCP Server Configuration
+#
+# Copy this file to mcp_config.yaml and customize for your deployment.
+#
+# Modes:
+#   - proxy: Lightweight proxy to remote TTS backend (recommended for VPS)
+#   - lazy: Load model on-demand, unload after timeout (mid-tier VPS)
+#   - always: Keep model loaded (dedicated GPU server)
+
+mode: "proxy"  # proxy | lazy | always
+
+# ==============================================================================
+# Proxy Mode Settings (for lightweight VPS deployment)
+# ==============================================================================
+proxy:
+  # URL of remote TTS backend (Gradio or FastAPI)
+  backend_url: "http://localhost:7860"
+
+  # Optional API key for authentication
+  # Use ${ENV_VAR} syntax to load from environment
+  api_key: "${TTS_API_KEY}"
+
+  # Request timeout in seconds
+  timeout: 120
+
+  # Maximum retry attempts for failed requests
+  max_retries: 3
+
+# ==============================================================================
+# Local Mode Settings (for running model locally)
+# ==============================================================================
+local:
+  # Compute device: cpu | cuda | mps (Apple Silicon)
+  device: "cpu"
+
+  # Model variant: english | multilingual (23 languages)
+  model_type: "english"
+
+  # Seconds before unloading idle model (lazy mode only)
+  # Set to 600 (10 minutes) for occasional use
+  # Set higher (3600 = 1 hour) for frequent use
+  lazy_unload_timeout: 600
+
+  # Maximum concurrent generations
+  # Set to 1 for most setups (models are large)
+  max_concurrent: 1
+
+# ==============================================================================
+# Voice Sample Management
+# ==============================================================================
+voices:
+  # Storage backend: local | s3 (s3 support coming soon)
+  storage: "local"
+
+  # Local storage directory for voice samples
+  local_path: "./voices"
+
+  # Maximum voice sample size in MB
+  max_size_mb: 10
+
+# ==============================================================================
+# Request Queue (optional, for handling concurrent requests)
+# ==============================================================================
+queue:
+  # Enable request queueing
+  enabled: false
+
+  # Queue backend: memory | redis
+  # memory: Simple in-process queue (lost on restart)
+  # redis: Persistent queue (requires Redis server)
+  backend: "memory"
+
+  # Redis connection URL (if using redis backend)
+  redis_url: "redis://localhost:6379"
+
+  # Maximum queue size
+  max_queue_size: 10
+
+# ==============================================================================
+# Server Settings
+# ==============================================================================
+server:
+  # Bind host (0.0.0.0 for all interfaces)
+  host: "0.0.0.0"
+
+  # Bind port
+  port: 8000
+
+  # Number of worker processes (usually 1 for MCP servers)
+  workers: 1
+
+  # Log level: debug | info | warning | error
+  log_level: "info"
+
+
+# ==============================================================================
+# Example Configurations
+# ==============================================================================
+
+# --- Configuration 1: Cheap VPS ($5/mo) + Remote GPU Server ---
+# mode: "proxy"
+# proxy:
+#   backend_url: "https://my-gpu-server.example.com/api/tts"
+#   api_key: "${TTS_API_KEY}"
+#
+# Resource usage: ~100MB RAM, minimal CPU
+# Best for: Production with separate GPU server
+
+# --- Configuration 2: Mid-tier VPS ($40/mo, 8GB RAM) ---
+# mode: "lazy"
+# local:
+#   device: "cpu"  # or "cuda" if GPU available
+#   model_type: "english"
+#   lazy_unload_timeout: 600
+#
+# Resource usage: 100MB idle, ~8GB when active
+# Best for: Moderate usage, cost-conscious deployment
+
+# --- Configuration 3: Dedicated GPU Server ---
+# mode: "always"
+# local:
+#   device: "cuda"
+#   model_type: "multilingual"
+#   max_concurrent: 2
+#
+# Resource usage: ~8GB RAM always
+# Best for: High-frequency usage, low latency
+
+# --- Configuration 4: Development (local testing) ---
+# mode: "always"
+# local:
+#   device: "cuda"  # or "mps" for Mac, "cpu" for no GPU
+#   model_type: "english"
+# voices:
+#   local_path: "./dev_voices"
+# server:
+#   log_level: "debug"
+#
+# Best for: Development and testing
