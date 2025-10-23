@@ -41,6 +41,29 @@ Lightweight Model Context Protocol (MCP) server for Chatterbox TTS, designed to 
    - Resource usage: ~8GB RAM always
    - Perfect for: Dedicated GPU server
 
+## 🆓 Free Tier Setup (Recommended!)
+
+Want to get started for just **$5/month**? Deploy the MCP server on a cheap VPS and use HuggingFace Spaces as a free TTS backend!
+
+### Quick Setup (10 minutes)
+
+1. **Deploy Chatterbox to HuggingFace Space** (free GPU backend)
+2. **Deploy MCP server to VPS** ($5/month - DigitalOcean, Linode, etc.)
+3. **Configure MCP to use your Space**
+
+**Total cost: $5/month** (vs $50+ for dedicated GPU server!)
+
+👉 **[Complete HuggingFace Space Setup Guide →](../docs/HUGGINGFACE_SPACE_SETUP.md)**
+
+The guide includes:
+- Step-by-step HF Space deployment
+- Ready-to-use Gradio app template
+- MCP server configuration
+- Troubleshooting tips
+- Cost optimization strategies
+
+---
+
 ## Quick Start
 
 ### 1. Install Dependencies
@@ -229,28 +252,50 @@ backend_info() -> BackendInfo
 
 ## Deployment Examples
 
-### Example 1: Cheap VPS + Remote Backend
+### Example 1: HuggingFace Space + Cheap VPS ⭐ RECOMMENDED
 
-**Setup:**
-1. Deploy lightweight MCP server on $5 VPS
-2. Use existing Gradio endpoint or deploy backend separately
+**Setup: FREE TTS backend + $5/month VPS**
+
+This is the most cost-effective deployment option!
+
+**Step 1: Deploy to HuggingFace Space** (free GPU backend)
+
+```bash
+# Use the ready-to-deploy Space template
+cd huggingface_space/
+
+# Follow the guide to deploy to HF Spaces
+# See: docs/HUGGINGFACE_SPACE_SETUP.md
+```
+
+Your Space URL will be: `https://YOUR_USERNAME-chatterbox-tts.hf.space`
+
+**Step 2: Deploy MCP Server to VPS**
 
 ```yaml
 # mcp_config.yaml
 mode: "proxy"
 proxy:
-  backend_url: "https://my-gradio-app.hf.space"
+  backend_url: "https://YOUR_USERNAME-chatterbox-tts.hf.space"
+  timeout: 180  # HF Spaces can be slower on CPU tier
 ```
 
 ```bash
-# On VPS
+# On your VPS ($5/month - DigitalOcean, Linode, Vultr)
 docker run -d -p 8000:8000 \
   -v ./voices:/app/voices \
-  -e TTS_BACKEND_URL=https://my-gradio-app.hf.space \
+  -v ./mcp_config.yaml:/app/mcp_config.yaml \
+  --restart unless-stopped \
   chatterbox-mcp
 ```
 
-**Monthly cost:** ~$5
+**Monthly cost:** ~$5 (VPS only, HF Space is FREE!)
+
+**Performance:**
+- CPU Space (free): 30-60s per generation
+- GPU upgrade ($0.60/hr): 3-5s per generation
+
+👉 **[Full HuggingFace Space Setup Guide →](../docs/HUGGINGFACE_SPACE_SETUP.md)**
 
 ### Example 2: All-in-One Docker Compose
 
